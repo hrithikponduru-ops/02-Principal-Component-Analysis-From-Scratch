@@ -53,7 +53,7 @@ C = \frac{1}{n - 1} X_c^{\mathsf T} X_c
   = \frac{1}{4} \begin{bmatrix} 10 & 10 \\ 10 & 11.2 \end{bmatrix}
   = \begin{bmatrix} 2.5 & 2.5 \\ 2.5 & 2.8 \end{bmatrix},
 \qquad
-\operatorname{tr}(C) = 5.3 \quad \text{(total variance)}
+\mathrm{SSE}{tr}(C) = 5.3 \quad \text{(total variance)}
 $$
 
 ### Eigenvalues from the characteristic polynomial
@@ -69,7 +69,7 @@ $$
 \lambda_1 = 5.1545, \qquad \lambda_2 = 0.1455
 $$
 
-Check: $\lambda_1 + \lambda_2 = 5.3 = \operatorname{tr}(C)$. The trace of a matrix always equals the sum of its eigenvalues.
+Check: $\lambda_1 + \lambda_2 = 5.3 = \mathrm{SSE}{tr}(C)$. The trace of a matrix always equals the sum of its eigenvalues.
 
 ### First eigenvector
 
@@ -88,7 +88,7 @@ $$
 $$
 
 $$
-\operatorname{Var}(\text{scores}) = 5.1545 = \lambda_1
+\mathrm{SSE}{Var}(\text{scores}) = 5.1545 = \lambda_1
 $$
 
 The eigenvalue *is* the variance of the data along its eigenvector. Mapping back with $\hat{X} = \text{scores}\, v_1^{\mathsf T} + \mathbf{1}\bar{x}$ and measuring the error:
@@ -108,7 +108,7 @@ What you drop is exactly what you lose. Keeping one of two dimensions retains $\
 Let $X_c \in \mathbb{R}^{n \times d}$ be centered data and $u \in \mathbb{R}^d$ a unit vector. The projection of every point onto $u$ is the vector $X_c u \in \mathbb{R}^n$. Its variance is
 
 $$
-\operatorname{Var}(X_c u)
+\mathrm{SSE}{Var}(X_c u)
   = \frac{1}{n - 1} (X_c u)^{\mathsf T} (X_c u)
   = u^{\mathsf T} \left( \frac{1}{n - 1} X_c^{\mathsf T} X_c \right) u
   = u^{\mathsf T} C u .
@@ -157,13 +157,13 @@ $$
 The total variance is the sum of the per-feature variances, the diagonal of $C$:
 
 $$
-\operatorname{tr}(C) = \sum_{j=1}^{d} C_{jj} = \sum_{i=1}^{d} \lambda_i ,
+\mathrm{SSE}{tr}(C) = \sum_{j=1}^{d} C_{jj} = \sum_{i=1}^{d} \lambda_i ,
 $$
 
 using the fact that trace is invariant under the similarity transform $C = V \Lambda V^{\mathsf T}$. Keep the first $k$ eigenvectors, and you capture
 
 $$
-\frac{\sum_{i=1}^{k} \lambda_i}{\sum_{i=1}^{d} \lambda_i} = \frac{\sum_{i=1}^{k} \lambda_i}{\operatorname{tr}(C)} \quad \text{of the variance.}
+\frac{\sum_{i=1}^{k} \lambda_i}{\sum_{i=1}^{d} \lambda_i} = \frac{\sum_{i=1}^{k} \lambda_i}{\mathrm{SSE}{tr}(C)} \quad \text{of the variance.}
 $$
 
 ### 3.5 Reconstruction error
@@ -237,10 +237,10 @@ Nine tests in `tests/test_pca.py`, each encoding one mathematical fact from sect
 | descending, non-negative | $\lambda_1 \ge \lambda_2 \ge \dots \ge 0$ (PSD) | exact |
 | components orthonormal | $V^{\mathsf T} V = I$ (spectral theorem) | abs $10^{-8}$ |
 | matches SVD | $V = W$, $\lambda_i = \sigma_i^2 / (n-1)$ | rel $10^{-8}$ |
-| scores uncorrelated | $\operatorname{Cov}(X_c V) = \Lambda$, diagonal | abs $10^{-8}$ |
+| scores uncorrelated | $\mathrm{SSE}{Cov}(X_c V) = \Lambda$, diagonal | abs $10^{-8}$ |
 | full-rank reconstruction exact | $V V^{\mathsf T} = I$ when $k = d$ | abs $10^{-8}$ |
 | error equals dropped eigenvalues | section 3.5 formula, for $k = 1, 3, 7$ | rel $10^{-8}$ |
-| eigenvalues sum to trace | $\sum \lambda_i = \operatorname{tr}(C)$ | rel $10^{-10}$ |
+| eigenvalues sum to trace | $\sum \lambda_i = \mathrm{SSE}{tr}(C)$ | rel $10^{-10}$ |
 
 Eigenvectors are compared up to sign because $v$ and $-v$ are both valid eigenvectors; which one an algorithm returns is an accident of the starting vector.
 
@@ -268,7 +268,7 @@ python -m pytest tests -v
 | 87 | 90.0 % | |
 | 100 | 91.5 % | 4.5 |
 
-Total variance $\operatorname{tr}(C) = 52.7$. The top eigenvalues are $5.12, \; 3.74, \; 3.25, \; 2.84, \; 2.57, \; 2.27$. The covariance matrix has rank 712, not 784: 72 border pixels are zero in every image, so those directions have exactly zero variance.
+Total variance $\mathrm{SSE}{tr}(C) = 52.7$. The top eigenvalues are $5.12, \; 3.74, \; 3.25, \; 2.84, \; 2.57, \; 2.27$. The covariance matrix has rank 712, not 784: 72 border pixels are zero in every image, so those directions have exactly zero variance.
 
 ### What the components look like
 
