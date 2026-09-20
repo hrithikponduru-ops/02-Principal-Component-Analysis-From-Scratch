@@ -1,0 +1,805 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Principal Component Analysis From Scratch</title>
+    <script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 2rem;
+            color: #333;
+            background: #fafafa;
+        }
+        
+        h1 {
+            font-size: 2.5rem;
+            margin-bottom: 0.5rem;
+            color: #1a1a1a;
+            border-bottom: 3px solid #0066cc;
+            padding-bottom: 0.5rem;
+        }
+        
+        h2 {
+            font-size: 1.8rem;
+            margin-top: 2.5rem;
+            margin-bottom: 1rem;
+            color: #0066cc;
+            border-left: 4px solid #0066cc;
+            padding-left: 1rem;
+        }
+        
+        h3 {
+            font-size: 1.3rem;
+            margin-top: 1.5rem;
+            margin-bottom: 0.8rem;
+            color: #0099ff;
+        }
+        
+        .subtitle {
+            font-size: 1.1rem;
+            color: #666;
+            margin-bottom: 1.5rem;
+            line-height: 1.8;
+        }
+        
+        .answer-box {
+            background: #e3f2fd;
+            border-left: 4px solid #0066cc;
+            padding: 1rem;
+            margin: 1.5rem 0;
+            border-radius: 4px;
+        }
+        
+        .answer-box strong {
+            color: #0066cc;
+        }
+        
+        .answer-box em {
+            color: #0099ff;
+        }
+        
+        .toc {
+            background: #f5f5f5;
+            padding: 1.5rem;
+            margin: 2rem 0;
+            border-radius: 8px;
+            border: 1px solid #ddd;
+        }
+        
+        .toc ol {
+            margin: 0;
+            padding-left: 2rem;
+        }
+        
+        .toc a {
+            color: #0066cc;
+            text-decoration: none;
+        }
+        
+        .toc a:hover {
+            text-decoration: underline;
+        }
+        
+        hr {
+            margin: 3rem 0;
+            border: none;
+            border-top: 2px solid #ddd;
+        }
+        
+        .math {
+            background: #f9f9f9;
+            padding: 1rem;
+            border-radius: 4px;
+            margin: 1rem 0;
+            overflow-x: auto;
+        }
+        
+        figure {
+            text-align: center;
+            margin: 2rem 0;
+            padding: 1rem;
+            background: #f9f9f9;
+            border-radius: 4px;
+        }
+        
+        figure img {
+            max-width: 100%;
+            height: auto;
+            border-radius: 4px;
+            margin-bottom: 0.5rem;
+        }
+        
+        figcaption {
+            color: #666;
+            font-size: 0.95rem;
+            font-style: italic;
+            line-height: 1.6;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1.5rem 0;
+            background: white;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        
+        table th {
+            background: #0066cc;
+            color: white;
+            padding: 0.75rem;
+            text-align: left;
+            font-weight: 600;
+        }
+        
+        table td {
+            padding: 0.75rem;
+            border-bottom: 1px solid #eee;
+        }
+        
+        table tr:hover {
+            background: #f5f5f5;
+        }
+        
+        code {
+            background: #f0f0f0;
+            padding: 0.2rem 0.4rem;
+            border-radius: 3px;
+            font-family: 'Monaco', 'Courier New', monospace;
+            font-size: 0.9rem;
+        }
+        
+        pre {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 1rem;
+            border-radius: 4px;
+            overflow-x: auto;
+            margin: 1.5rem 0;
+            line-height: 1.4;
+        }
+        
+        pre code {
+            background: none;
+            padding: 0;
+            color: inherit;
+        }
+        
+        blockquote {
+            border-left: 4px solid #0066cc;
+            padding-left: 1rem;
+            color: #666;
+            margin-left: 0;
+            font-style: italic;
+        }
+        
+        .formula-description {
+            color: #555;
+            font-size: 0.95rem;
+            margin-top: 0.5rem;
+        }
+    </style>
+</head>
+<body>
+    <h1>Principal Component Analysis From Scratch</h1>
+    
+    <div class="subtitle">
+        <strong>Question.</strong> Where does PCA come from? Can I derive it from a single
+        optimisation problem, compute it with an eigensolver I write myself, and
+        verify the result against a professional linear algebra library?
+    </div>
+    
+    <div class="answer-box">
+        <strong>Answer.</strong> Yes. PCA falls out of "find the direction of maximum variance"
+        via one Lagrange multiplier. A 60-line power-iteration solver recovers the
+        eigenvectors of the 784 × 784 MNIST covariance matrix, matching
+        LAPACK to 10<sup>−8</sup>. The first 100 of 784 directions carry 91.5% of the
+        variance.
+    </div>
+    
+    <figure>
+        <figcaption><strong>Reconstructions</strong></figcaption>
+    </figure>
+    
+    <hr>
+    
+    <div class="toc">
+        <strong>Contents</strong>
+        <ol>
+            <li><a href="#section-1">The idea in one paragraph</a></li>
+            <li><a href="#section-2">A worked example you can do by hand</a></li>
+            <li><a href="#section-3">The derivations</a></li>
+            <li><a href="#section-4">The eigensolver: power iteration</a></li>
+            <li><a href="#section-5">Verification</a></li>
+            <li><a href="#section-6">Results on MNIST</a></li>
+            <li><a href="#section-7">Numerical lessons learned</a></li>
+            <li><a href="#section-8">How to run</a></li>
+            <li><a href="#section-9">Code map</a></li>
+        </ol>
+    </div>
+    
+    <hr>
+    
+    <h2 id="section-1">1. The idea in one paragraph</h2>
+    
+    <p>
+        A data point with 784 numbers lives in a 784-dimensional space, but the
+        points rarely fill it. Handwritten digits occupy a thin, curved sheet inside
+        that space. PCA finds the flat subspace that best approximates the sheet:
+        the direction along which the data varies most, then the direction varying
+        most among those perpendicular to the first, and so on. Each direction is an
+        eigenvector of the covariance matrix. Its eigenvalue is the variance along
+        it. Keep the top $k$ directions and you have compressed 784 numbers to $k$
+        while losing as little as mathematically possible.
+    </p>
+    
+    <figure>
+        <figcaption><strong>Variance maximisation</strong> — Left: 2-D data with its two principal axes. Middle: variance of the data
+        projected onto a unit vector, as that vector rotates. The maximum and
+        minimum are the two eigenvalues. Right: projecting onto $v_1$ alone. The
+        red segments are what is lost, and their mean squared length is
+        $\lambda_2$.</figcaption>
+    </figure>
+    
+    <hr>
+    
+    <h2 id="section-2">2. A worked example you can do by hand</h2>
+    
+    <p>
+        Five points in two dimensions. Every number below is produced by the same
+        code that handles MNIST. Run <code>python worked_example.py</code> to see it print.
+    </p>
+    
+    <h3>Data and centering</h3>
+    
+    <div class="math">
+        $$X = \begin{bmatrix} 2 & 1 \\ 3 & 3 \\ 4 & 3 \\ 5 & 5 \\ 6 & 5 \end{bmatrix},
+        \qquad
+        \bar{x} = \begin{bmatrix} 4 & 3.4 \end{bmatrix},
+        \qquad
+        X_c = X - \mathbf{1}\bar{x} = \begin{bmatrix} -2 & -2.4 \\ -1 & -0.4 \\ 0 & -0.4 \\ 1 & 1.6 \\ 2 & 1.6 \end{bmatrix}$$
+    </div>
+    
+    <h3>Covariance matrix</h3>
+    
+    <div class="math">
+        $$C = \frac{1}{n - 1} X_c^{\mathsf T} X_c
+          = \frac{1}{4} \begin{bmatrix} 10 & 10 \\ 10 & 11.2 \end{bmatrix}
+          = \begin{bmatrix} 2.5 & 2.5 \\ 2.5 & 2.8 \end{bmatrix},
+        \qquad
+        \operatorname{tr}(C) = 5.3 \quad \text{(total variance)}$$
+    </div>
+    
+    <h3>Eigenvalues from the characteristic polynomial</h3>
+    
+    <div class="math">
+        $$\det(C - \lambda I) = (2.5 - \lambda)(2.8 - \lambda) - 2.5^2
+          = \lambda^2 - 5.3\lambda + 0.75 = 0$$
+    </div>
+    
+    <div class="math">
+        $$\lambda_{1,2} = \frac{5.3 \pm \sqrt{5.3^2 - 4(0.75)}}{2}
+          \quad\Longrightarrow\quad
+        \lambda_1 = 5.1545, \qquad \lambda_2 = 0.1455$$
+    </div>
+    
+    <p>
+        Check: $\lambda_1 + \lambda_2 = 5.3 = \operatorname{tr}(C)$. The trace of a
+        matrix always equals the sum of its eigenvalues.
+    </p>
+    
+    <h3>First eigenvector</h3>
+    
+    <p>
+        Solve $(C - \lambda_1 I) v = 0$. The first row gives
+        $(2.5 - 5.1545) v_x + 2.5 v_y = 0$, so $v \propto \begin{bmatrix} 2.5 & 2.6545 \end{bmatrix}$.
+        Normalised:
+    </p>
+    
+    <div class="math">
+        $$v_1 = \begin{bmatrix} 0.6856 \\ 0.7280 \end{bmatrix}$$
+    </div>
+    
+    <p>
+        Power iteration (section 4) reaches the same vector in 10 iterations,
+        agreeing with the hand solution to $|v_{\text{hand}} \cdot v_{\text{power}}| = 1.000000$.
+    </p>
+    
+    <h3>Project and reconstruct</h3>
+    
+    <div class="math">
+        $$\text{scores} = X_c v_1 = \begin{bmatrix} -3.118 & -0.977 & -0.291 & 1.850 & 2.536 \end{bmatrix}^{\mathsf T}$$
+    </div>
+    
+    <div class="math">
+        $$\operatorname{Var}(\text{scores}) = 5.1545 = \lambda_1$$
+    </div>
+    
+    <p>
+        The eigenvalue <em>is</em> the variance of the data along its eigenvector. Mapping
+        back with $\hat{X} = \text{scores}\, v_1^{\mathsf T} + \mathbf{1}\bar{x}$ and
+        measuring the error:
+    </p>
+    
+    <div class="math">
+        $$\frac{1}{n} \sum_i \lVert x_i - \hat{x}_i \rVert^2 = 0.1164 = \frac{n - 1}{n}\,\lambda_2$$
+    </div>
+    
+    <p>
+        What you drop is exactly what you lose. Keeping one of two dimensions
+        retains $\lambda_1 / (\lambda_1 + \lambda_2) = 97.3\%$ of the variance.
+    </p>
+    
+    <hr>
+    
+    <h2 id="section-3">3. The derivations</h2>
+    
+    <h3>3.1 Variance along a direction</h3>
+    
+    <p>
+        Let $X_c \in \mathbb{R}^{n \times d}$ be centered data and $u \in \mathbb{R}^d$ a
+        unit vector. The projection of every point onto $u$ is the vector
+        $X_c u \in \mathbb{R}^n$. Its variance is
+    </p>
+    
+    <div class="math">
+        $$\operatorname{Var}(X_c u)
+          = \frac{1}{n - 1} (X_c u)^{\mathsf T} (X_c u)
+          = u^{\mathsf T} \left( \frac{1}{n - 1} X_c^{\mathsf T} X_c \right) u
+          = u^{\mathsf T} C u$$
+    </div>
+    
+    <p>
+        So the covariance matrix is the object that turns a direction into a
+        variance. $C$ is symmetric ($C^{\mathsf T} = C$) and positive semi-definite
+        ($u^{\mathsf T} C u \ge 0$ for all $u$, since it is a variance).
+    </p>
+    
+    <h3>3.2 Maximising variance gives an eigenproblem</h3>
+    
+    <p>We want</p>
+    
+    <div class="math">
+        $$\max_{u} \; u^{\mathsf T} C u \quad \text{subject to} \quad u^{\mathsf T} u = 1$$
+    </div>
+    
+    <p>
+        Without the constraint the maximum is infinite (scale $u$ up). Introduce a
+        Lagrange multiplier $\lambda$:
+    </p>
+    
+    <div class="math">
+        $$\mathcal{L}(u, \lambda) = u^{\mathsf T} C u - \lambda \left( u^{\mathsf T} u - 1 \right)$$
+    </div>
+    
+    <p>
+        Set the gradient with respect to $u$ to zero, using
+        $\nabla_u (u^{\mathsf T} C u) = 2 C u$ for symmetric $C$ and $\nabla_u (u^{\mathsf T} u) = 2u$:
+    </p>
+    
+    <div class="math">
+        $$2 C u - 2 \lambda u = 0
+        \quad\Longleftrightarrow\quad
+        \boxed{C u = \lambda u}$$
+    </div>
+    
+    <p>
+        <strong>Every critical point is an eigenvector of $C$.</strong> Plugging back in, the
+        variance at such a point is $u^{\mathsf T} C u = u^{\mathsf T} (\lambda u) = \lambda$.
+        So the eigenvalue is the variance, and the maximum variance is the largest
+        eigenvalue $\lambda_1$, attained at its eigenvector $v_1$.
+    </p>
+    
+    <h3>3.3 The remaining components</h3>
+    
+    <p>
+        For the second direction, add the constraint $u^{\mathsf T} v_1 = 0$. The same
+        Lagrangian argument with a second multiplier gives $C u = \lambda u$ again,
+        so $u$ is an eigenvector orthogonal to $v_1$: the second-largest eigenvalue's
+        eigenvector $v_2$. Repeating gives $v_3, \dots, v_d$.
+    </p>
+    
+    <p>
+        This works because of the <strong>spectral theorem</strong>: a real symmetric matrix has
+        $d$ real eigenvalues and an orthonormal basis of eigenvectors,
+    </p>
+    
+    <div class="math">
+        $$C = V \Lambda V^{\mathsf T} = \sum_{i=1}^{d} \lambda_i \, v_i v_i^{\mathsf T},
+        \qquad V^{\mathsf T} V = I,
+        \qquad \lambda_1 \ge \lambda_2 \ge \dots \ge \lambda_d \ge 0$$
+    </div>
+    
+    <h3>3.4 Total variance and the fraction explained</h3>
+    
+    <p>
+        The total variance is the sum of the per-feature variances, the diagonal of $C$:
+    </p>
+    
+    <div class="math">
+        $$\operatorname{tr}(C) = \sum_{j=1}^{d} C_{jj} = \sum_{i=1}^{d} \lambda_i$$
+    </div>
+    
+    <p>
+        using the fact that trace is invariant under the similarity transform $C = V \Lambda V^{\mathsf T}$.
+        Keep the first $k$ eigenvectors, and you capture
+    </p>
+    
+    <div class="math">
+        $$\frac{\sum_{i=1}^{k} \lambda_i}{\sum_{i=1}^{d} \lambda_i} = \frac{\sum_{i=1}^{k} \lambda_i}{\operatorname{tr}(C)} \quad \text{of the variance}$$
+    </div>
+    
+    <h3>3.5 Reconstruction error</h3>
+    
+    <p>
+        Project each point $x_i$ onto the first $k$ directions: $\hat{x}_i = V_k V_k^{\mathsf T} x_i + \bar{x}$,
+        where $V_k$ is the first $k$ columns of $V$. The reconstruction error per point is
+    </p>
+    
+    <div class="math">
+        $$\frac{1}{n} \sum_i \lVert x_i - \hat{x}_i \rVert^2 = \sum_{i=k+1}^{d} \frac{n-1}{n} \lambda_i$$
+    </div>
+    
+    <p>
+        exactly the variance in the directions thrown away.
+    </p>
+    
+    <hr>
+    
+    <h2 id="section-4">4. The eigensolver: power iteration</h2>
+    
+    <h3>4.1 The algorithm</h3>
+    
+    <p>
+        The dominant eigenpair is found by repeatedly multiplying by $C$:
+    </p>
+    
+    <div class="math">
+        $$w^{(0)} = \text{random unit vector}$$
+    </div>
+    
+    <div class="math">
+        $$w^{(t+1)} = \frac{C w^{(t)}}{\lVert C w^{(t)} \rVert}$$
+    </div>
+    
+    <p>
+        The numerator projects onto the dominant eigenvector, and the denominator keeps the norm at 1.
+        This converges exponentially: by iteration $t$ the error is $O(\rho^t)$ where $\rho = \lambda_2 / \lambda_1$
+        is the ratio of the two largest eigenvalues. For slow convergence you need ratio close to 1:
+        for ratio $0.99$ (90 iterations needed) $\lambda_2 / \lambda_1 = 0.99$,
+        for ratio $0.998$ it is about 14,000.
+    </p>
+    
+    <h3>4.2 Estimating the eigenvalue: the Rayleigh quotient</h3>
+    
+    <p>
+        For a unit vector $v$, the number $v^{\mathsf T} C v$ is the variance along $v$ (section 3.1).
+        When $v$ is an eigenvector it equals $\lambda$ exactly. So
+        the running eigenvalue estimate is $\lambda^{(t)} = v^{(t)\mathsf T} C v^{(t)}$.
+    </p>
+    
+    <h3>4.3 Stopping rule</h3>
+    
+    <p>
+        $v$ is an eigenvector exactly when $C v - \lambda v = 0$. So iterate until
+        the residual is small relative to the eigenvalue:
+    </p>
+    
+    <div class="math">
+        $$\lVert C v - \lambda v \rVert \le 10^{-12} \, \lambda$$
+    </div>
+    
+    <h3>4.4 Finding the next eigenvector: deflation</h3>
+    
+    <p>Once $\lambda_1, v_1$ are known, form</p>
+    
+    <div class="math">
+        $$C' = C - \lambda_1 v_1 v_1^{\mathsf T} = \sum_{i=2}^{d} \lambda_i v_i v_i^{\mathsf T}$$
+    </div>
+    
+    <p>
+        $C'$ has the same eigenvectors as $C$, but $v_1$ now has eigenvalue 0. Its
+        dominant eigenpair is $\lambda_2, v_2$, so power iteration on $C'$ finds it.
+        Repeat $k$ times.
+    </p>
+    
+    <p>
+        In exact arithmetic that is the whole algorithm. In floating point it is
+        not enough. Each multiplication reintroduces a tiny component along $v_1$
+        (rounding error), and for slowly converging eigenpairs those components
+        accumulate over thousands of iterations until the "new" eigenvector is
+        visibly not orthogonal to the old ones. The fix is to project out all
+        previously found eigenvectors on every step, one Gram-Schmidt sweep:
+    </p>
+    
+    <div class="math">
+        $$w \leftarrow w - Q Q^{\mathsf T} w, \qquad Q = \begin{bmatrix} v_1 & \cdots & v_{m} \end{bmatrix}$$
+    </div>
+    
+    <p>
+        With this, orthonormality holds to $10^{-8}$ even for eigenvectors that
+        never fully converged. Section 7 describes how this was discovered.
+    </p>
+    
+    <hr>
+    
+    <h2 id="section-5">5. Verification</h2>
+    
+    <p>
+        Nine tests in <code>tests/test_pca.py</code>, each encoding one mathematical fact from
+        section 3. A wrong eigensolver can still produce plausible-looking pictures,
+        so the pictures prove nothing. These do.
+    </p>
+    
+    <table>
+        <thead>
+            <tr>
+                <th>Test</th>
+                <th>Mathematical fact</th>
+                <th>Tolerance</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td>eigenvalues match LAPACK</td>
+                <td>power iteration finds the same $\lambda_i$ as <code>eigvalsh</code></td>
+                <td>rel 10<sup>−8</sup></td>
+            </tr>
+            <tr>
+                <td>eigenvectors match LAPACK</td>
+                <td>same $v_i$ as <code>eigh</code>, up to sign</td>
+                <td>abs 10<sup>−6</sup></td>
+            </tr>
+            <tr>
+                <td>descending, non-negative</td>
+                <td>$\lambda_1 \ge \lambda_2 \ge \dots \ge 0$ (PSD)</td>
+                <td>exact</td>
+            </tr>
+            <tr>
+                <td>components orthonormal</td>
+                <td>$V^{\mathsf T} V = I$ (spectral theorem)</td>
+                <td>abs 10<sup>−8</sup></td>
+            </tr>
+            <tr>
+                <td>matches SVD</td>
+                <td>$V = W$, $\lambda_i = \sigma_i^2 / (n-1)$</td>
+                <td>rel 10<sup>−8</sup></td>
+            </tr>
+            <tr>
+                <td>scores uncorrelated</td>
+                <td>$\operatorname{Cov}(X_c V) = \Lambda$, diagonal</td>
+                <td>abs 10<sup>−8</sup></td>
+            </tr>
+            <tr>
+                <td>full-rank reconstruction exact</td>
+                <td>$V V^{\mathsf T} = I$ when $k = d$</td>
+                <td>abs 10<sup>−8</sup></td>
+            </tr>
+            <tr>
+                <td>error equals dropped eigenvalues</td>
+                <td>section 3.5 formula, for $k = 1, 3, 7$</td>
+                <td>rel 10<sup>−8</sup></td>
+            </tr>
+            <tr>
+                <td>eigenvalues sum to trace</td>
+                <td>$\sum \lambda_i = \operatorname{tr}(C)$</td>
+                <td>rel 10<sup>−10</sup></td>
+            </tr>
+        </tbody>
+    </table>
+    
+    <p>
+        Eigenvectors are compared up to sign because $v$ and $-v$ are both valid
+        eigenvectors; which one an algorithm returns is an accident of the starting
+        vector.
+    </p>
+    
+    <pre><code>python -m pytest tests -v
+9 passed</code></pre>
+    
+    <hr>
+    
+    <h2 id="section-6">6. Results on MNIST</h2>
+    
+    <p>
+        60,000 training images, $d = 784$, $k = 100$ components by power iteration
+        with deflation. Fit time about 66 seconds.
+    </p>
+    
+    <figure>
+        <figcaption><strong>Explained variance</strong></figcaption>
+    </figure>
+    
+    <table>
+        <thead>
+            <tr>
+                <th style="text-align: right;">Components $k$</th>
+                <th style="text-align: right;">Cumulative variance</th>
+                <th style="text-align: right;">Reconstruction MSE per image</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td style="text-align: right;">1</td>
+                <td style="text-align: right;">9.7%</td>
+                <td style="text-align: right;">47.6</td>
+            </tr>
+            <tr>
+                <td style="text-align: right;">2</td>
+                <td style="text-align: right;">16.8%</td>
+                <td style="text-align: right;">43.9</td>
+            </tr>
+            <tr>
+                <td style="text-align: right;">10</td>
+                <td style="text-align: right;">48.8%</td>
+                <td style="text-align: right;">27.0</td>
+            </tr>
+            <tr>
+                <td style="text-align: right;">11</td>
+                <td style="text-align: right;">50.0%</td>
+                <td style="text-align: right;">—</td>
+            </tr>
+            <tr>
+                <td style="text-align: right;">44</td>
+                <td style="text-align: right;">80.0%</td>
+                <td style="text-align: right;">—</td>
+            </tr>
+            <tr>
+                <td style="text-align: right;">50</td>
+                <td style="text-align: right;">82.5%</td>
+                <td style="text-align: right;">9.2</td>
+            </tr>
+            <tr>
+                <td style="text-align: right;">87</td>
+                <td style="text-align: right;">90.0%</td>
+                <td style="text-align: right;">—</td>
+            </tr>
+            <tr>
+                <td style="text-align: right;">100</td>
+                <td style="text-align: right;">91.5%</td>
+                <td style="text-align: right;">4.5</td>
+            </tr>
+        </tbody>
+    </table>
+    
+    <p>
+        Total variance $\operatorname{tr}(C) = 52.7$. The top eigenvalues are
+        $5.12, \; 3.74, \; 3.25, \; 2.84, \; 2.57, \; 2.27$. The covariance matrix
+        has rank 712, not 784: 72 border pixels are zero in every image, so those
+        directions have exactly zero variance.
+    </p>
+    
+    <h3>What the components look like</h3>
+    
+    <figure>
+        <figcaption><strong>Eigen digits</strong></figcaption>
+    </figure>
+    
+    <p>
+        Each principal component is a vector in $\mathbb{R}^{784}$, so it can be
+        drawn as a $28 \times 28$ image. Red and blue are positive and negative
+        weights. The first component is roughly "how much ink is in a ring shape",
+        separating 0s from 1s. Later components capture slant, width, and the
+        presence of loops. By component 16 they are hard to name, which matches
+        their small share of the variance.
+    </p>
+    
+    <figure>
+        <figcaption><strong>Mean digit</strong> — The mean image $\bar{x}$ that is subtracted before everything else.</figcaption>
+    </figure>
+    
+    <h3>Compression</h3>
+    
+    <p>
+        The figure at the top of this page shows one example of each digit
+        reconstructed from $k = 2, 10, 50, 100$ components. At $k = 2$ everything
+        looks like a blurry 0 or 9. At $k = 10$ digits are recognisable. At
+        $k = 50$ they are clean. Storing 50 numbers instead of 784 is a 15.7×
+        compression with 82.5% of the variance retained.
+    </p>
+    
+    <h3>A 2-D map of the digits</h3>
+    
+    <figure>
+        <figcaption><strong>2-D scatter</strong> — Projecting onto just $v_1$ and $v_2$ separates 0s (left), 1s (right), and
+        puts 4, 7, 9 together at the bottom, which makes sense since they share a
+        vertical stroke. This is 16.8% of the variance; the other digits overlap
+        because the rest lives in the 782 dimensions not shown.</figcaption>
+    </figure>
+    
+    <hr>
+    
+    <h2 id="section-7">7. Numerical lessons learned</h2>
+    
+    <h3>Deflation alone loses orthogonality</h3>
+    
+    <p>
+        The first version of the solver used deflation without re-orthogonalisation. Three tests failed with errors
+        around $10^{-5}$: components were not orthonormal and full-rank
+        reconstruction was not exact. The cause was slow convergence on nearly
+        equal eigenvalues, where thousands of iterations let rounding error along
+        already-found directions accumulate. Projecting them out on every step
+        fixed it. In textbooks deflation is exact; on a computer it is not.
+    </p>
+    
+    <h3>The convergence test matters</h3>
+    
+    <p>
+        The first stopping rule compared successive iterates, $1 - |v^{(t+1)} \cdot v^{(t)}| < 10^{-12}$.
+        This plateaued at eigenvector accuracy near $10^{-8}$, because
+        $1 - \cos\theta \approx \theta^2 / 2$ hits machine epsilon when
+        $\theta \approx 10^{-8}$. The score-covariance test failed with off-diagonal
+        entries of $10^{-5}$. Switching to the residual $\lVert C v - \lambda v \rVert$,
+        which is linear in the error, fixed it.
+    </p>
+    
+    <h3>Some eigenpairs never converge in the iteration budget</h3>
+    
+    <p>
+        Nine of the first 100 MNIST eigenvalue gaps are below 1%, the worst being
+        $\lambda_{98} / \lambda_{97} = 0.998$. Those components hit the 10,000
+        iteration cap. Their eigenvalues are still accurate (the Rayleigh quotient
+        is quadratically accurate in the eigenvector error) and they are still
+        orthonormal (because of the re-orthogonalisation), but the individual
+        vectors are only determined up to rotation within their near-degenerate
+        subspace. That is not a bug: when two eigenvalues are equal, the
+        eigenvectors genuinely are not unique. LAPACK's <code>eigh</code> avoids the problem
+        entirely by using a different algorithm (Householder tridiagonalisation
+        plus QR), which is why professionals use it.
+    </p>
+    
+    <h3>Rank deficiency shows up as exact zeros</h3>
+    
+    <p>
+        72 of 784 eigenvalues are zero to machine precision, one per always-black border pixel. Any method
+        that divides by eigenvalues (whitening, Mahalanobis distance) would fail
+        here without a guard.
+    </p>
+    
+    <hr>
+    
+    <h2 id="section-8">8. How to run</h2>
+    
+    <p>From this folder:</p>
+    
+    <pre><code>python -m pytest tests -v     # verify against LAPACK (under 1 second)
+python worked_example.py      # print the 2-D example step by step
+python run.py                 # fit MNIST, write result figures (about 1 minute)
+python make_figures.py        # regenerate the conceptual diagrams</code></pre>
+    
+    <p>
+        MNIST is shared with project 01 in <code>../.data/</code> and downloads on first use.
+    </p>
+    
+    <hr>
+    
+    <h2 id="section-9">9. Code map</h2>
+    
+    <pre><code>pca/
+  data.py             load MNIST as NumPy arrays
+  covariance.py       center, covariance
+  power_iteration.py  power_iteration, deflate, top_k_eigenpairs   (the solver)
+  pca.py              fit, transform, inverse_transform, reconstruction_error
+
+tests/
+  test_pca.py         nine checks against numpy.linalg
+
+run.py                MNIST experiment and result figures
+worked_example.py     the 2-D example from section 2
+make_figures.py       conceptual diagrams
+figures/              generated images used above</code></pre>
+    
+    <p>
+        The fitted model is a frozen dataclass. <code>numpy.linalg</code> is imported only in
+        the tests.
+    </p>
+    
+</body>
+</html>
